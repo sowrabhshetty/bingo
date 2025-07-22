@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Classic Number Bingo (1-90)</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      margin: 0; padding: 20px;
+      background: #121212;
+      color: #eee;
+      display: flex; flex-direction: column; align-items: center;
+      min-height: 100vh;
+    }
+    h1 {
+      margin-bottom: 10px;
+      font-size: 2rem;
+    }
+    #bingo-container {
+      max-width: 450px;
+      width: 90vw;
+      user-select: none;
+    }
+    #bingo-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+      margin-bottom: 20px;
+    }
+    .cell {
+      background: #222;
+      border-radius: 8px;
+      border: 2px solid #444;
+      padding: 16px 8px;
+      text-align: center;
+      font-weight: 600;
+      font-size: 1.1rem;
+      cursor: pointer;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 64px;
+      transition: background-color 0.2s, border-color 0.3s;
+      user-select: none;
+    }
+    .cell.marked {
+      background: #00b894;
+      border-color: #55efc4;
+      color: #121212;
+    }
+    .cell.bingo-row,
+    .cell.bingo-col,
+    .cell.bingo-diag {
+      box-shadow: 0 0 10px 3px #fdcb6e;
+      background: #fdcb6e !important;
+      color: #121212 !important;
+      border-color: #fab1a0 !important;
+    }
+    .cell.free {
+      background: #6c5ce7;
+      color: white;
+      cursor: default;
+    }
+    #new-card-btn {
+      background-color: #0984e3;
+      border: none;
+      color: white;
+      padding: 10px 22px;
+      font-size: 1.1rem;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background-color 0.25s;
+    }
+    #new-card-btn:hover {
+      background-color: #74b9ff;
+    }
+    #confetti-canvas {
+      position: fixed;
+      top: 0; left: 0;
+      pointer-events: none;
+      width: 100vw;
+      height: 100vh;
+      z-index: 9999;
+    }
+    @media (max-width: 400px) {
+      .cell {
+        padding: 12px 6px;
+        font-size: 1rem;
+        min-height: 56px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <h1>Classic Number Bingo (1–90)</h1>
+  <div id="bingo-container">
+    <div id="bingo-grid" aria-label="Bingo Card" role="grid"></div>
+    <button id="new-card-btn" aria-label="Generate new bingo card">New Card</button>
+  </div>
+
+  <canvas id="confetti-canvas"></canvas>
+
+  <!-- JSConfetti library -->
+  <script src="jsconfetti.browser.js"></script>
+
+  <script src="https://cdn.jsdelivr.net/npm/js-confetti@latest/dist/js-confetti.browser.js"></script>
+
+  <script>
+    const GRID_SIZE = 5;
+    const TOTAL_NUMBERS = 90;
+    const CENTER_INDEX = Math.floor(GRID_SIZE * GRID_SIZE / 2);
+
+    const bingoGrid = document.getElementById('bingo-grid');
+    const newCardBtn = document.getElementById('new-card-btn');
+    const confettiCanvas = document.getElementById('confetti-canvas');
+    const jsConfetti = new JSConfetti({ canvas: confettiCanvas });
+
+    let cardCells = [];
+    let bingoShown = false;
+
+    function range(start, end) {
+      return Array.from({length: end - start + 1}, (_, i) => start + i);
+    }
+
+    function shuffle(array) {
+      for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+      }
+      return array;
+    }
+
+    function generateNumbers() {
+      const numbers = shuffle(range(1, TOTAL_NUMBERS));
+      return numbers.slice(0, GRID_SIZE * GRID_SIZE - 1);
+    }
+
+    function generateCard() {
+      bingoGrid.innerHTML = '';
+      cardCells = [];
+      bingoShown = false;
+
+      let numbers = generateNumbers();
+
+      for (let i = 0; i < GRID_SIZE * GRID_SIZE; i++) {
+        const cell = document.createElement('div');
+        cell.classList.add('cell');
+        cell.setAttribute('tabindex', '0');
+        cell.setAttribute('role', 'gridcell');
+        cell.dataset.index = i;
+
+        if (i === CENTER_INDEX) {
+          cell.textContent = "Free";
+          cell.classList.add('free', 'marked');
+        } else {
+          const idx = i > CENTER_INDEX ? i - 1 : i;
+          cell.textContent = numbers[idx];
+        }
+
+        cell.addEventListener('click', () => toggleCell(i));
+        cell.addEventListener('keydown', (e) => {
+          if (e.key === ' ' || e.key === 'Enter') {
+            e.preventDefault();
+            toggleCell(i);
+          }
+        });
+
+        bingoGrid.appendChild(cell);
+        cardCells.push({ el: cell, marked: cell.classList.contains('marked') });
+      }
+      clearBingoHighlights();
+    }
+
+    function toggleCell(index) {
+      if (index === CENTER_INDEX) return;
+
+      const cell = cardCells[index];
+      cell.marked = !cell.marked;
+      cell.el.classList.toggle('marked', cell.marked);
+
+      checkForBingo();
+    }
+
+    function clearBingoHighlights() {
+      cardCells.forEach(c => {
+        c.el.classList.remove('bingo-row', 'bingo-col', 'bingo-diag');
+      });
+    }
+
+    function checkForBingo() {
+      clearBingoHighlights();
+
+      const marks = cardCells.map(c => (c.marked ? 1 : 0));
+      marks[CENTER_INDEX] = 1; // free cell always marked
+
+      let bingoDetected = false;
+
+      // Check rows
+      for (let r = 0; r < GRID_SIZE; r++) {
+        let indices = [];
+        let complete = true;
+        for (let c = 0; c < GRID_SIZE; c++) {
+          let idx = r * GRID_SIZE + c;
+          indices.push(idx);
+          if (!marks[idx]) complete = false;
+        }
+        if (complete) {
+          indices.forEach(i => cardCells[i].el.classList.add('bingo-row'));
+          bingoDetected = true;
+        }
+      }
+
+      // Check columns
+      for (let c = 0; c < GRID_SIZE; c++) {
+        let indices = [];
+        let complete = true;
+        for (let r = 0; r < GRID_SIZE; r++) {
+          let idx = r * GRID_SIZE + c;
+          indices.push(idx);
+          if (!marks[idx]) complete = false;
+        }
+        if (complete) {
+          indices.forEach(i => cardCells[i].el.classList.add('bingo-col'));
+          bingoDetected = true;
+        }
+      }
+
+      // Check diagonal TL-BR
+      let diag1 = [];
+      let diag1Complete = true;
+      for (let i = 0; i < GRID_SIZE; i++) {
+        let idx = i * GRID_SIZE + i;
+        diag1.push(idx);
+        if (!marks[idx]) diag1Complete = false;
+      }
+      if (diag1Complete) {
+        diag1.forEach(i => cardCells[i].el.classList.add('bingo-diag'));
+        bingoDetected = true;
+      }
+
+      // Check diagonal TR-BL
+      let diag2 = [];
+      let diag2Complete = true;
+      for (let i = 0; i < GRID_SIZE; i++) {
+        let idx = i * GRID_SIZE + (GRID_SIZE - 1 - i);
+        diag2.push(idx);
+        if (!marks[idx]) diag2Complete = false;
+      }
+      if (diag2Complete) {
+        diag2.forEach(i => cardCells[i].el.classList.add('bingo-diag'));
+        bingoDetected = true;
+      }
+
+      if (bingoDetected && !bingoShown) {
+        showCelebration();
+        bingoShown = true;
+      }
+      if (!bingoDetected) {
+        bingoShown = false;
+      }
+    }
+
+    function showCelebration() {
+      jsConfetti.addConfetti({
+        emojis: ["🎉", "✨", "🥳", "🍀", "🌟", "🍻", "🎈", "💰"],
+        emojiSize: 36,
+        confettiNumber: 100
+      });
+    }
+
+    newCardBtn.addEventListener('click', generateCard);
+
+    generateCard();
+  </script>
+</body>
+</html>
